@@ -249,38 +249,16 @@ class ExtendedTextSelectionState extends State<ExtendedTextSelection>
   }
 
   void _handleSingleLongTapStart(LongPressStartDetails details) {
-    switch (Theme.of(context).platform) {
-      case TargetPlatform.iOS:
-        _renderParagraph.selectPositionAt(
-          from: details.globalPosition,
-          cause: SelectionChangedCause.longPress,
-        );
-        break;
-      case TargetPlatform.android:
-      case TargetPlatform.fuchsia:
-        _renderParagraph.selectWord(cause: SelectionChangedCause.longPress);
-        Feedback.forLongPress(context);
-        break;
-    }
+    _renderParagraph.selectWord(cause: SelectionChangedCause.longPress);
+    Feedback.forLongPress(context);
   }
 
   void _handleSingleLongTapMoveUpdate(LongPressMoveUpdateDetails details) {
-    switch (Theme.of(context).platform) {
-      case TargetPlatform.iOS:
-        _renderParagraph.selectPositionAt(
-          from: details.globalPosition,
-          cause: SelectionChangedCause.longPress,
-        );
-        break;
-      case TargetPlatform.android:
-      case TargetPlatform.fuchsia:
-        _renderParagraph.selectWordsInRange(
-          from: details.globalPosition - details.offsetFromOrigin,
-          to: details.globalPosition,
-          cause: SelectionChangedCause.longPress,
-        );
-        break;
-    }
+    _renderParagraph.selectWordsInRange(
+      from: details.globalPosition - details.offsetFromOrigin,
+      to: details.globalPosition,
+      cause: SelectionChangedCause.longPress,
+    );
   }
 
   void _handleSingleLongTapEnd(LongPressEndDetails details) {
