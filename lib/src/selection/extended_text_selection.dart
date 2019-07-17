@@ -16,7 +16,7 @@ import 'selection_controls/extended_text_selection_controls.dart';
 ///
 
 class ExtendedTextSelection extends StatefulWidget {
-  final GestureTapCallback onTap;
+  final GestureTapUpCallback onTapUp;
 
   /// How the text should be aligned horizontally.
   final TextAlign textAlign;
@@ -90,7 +90,7 @@ class ExtendedTextSelection extends StatefulWidget {
   final ExtendedTextSelectionControls textSelectionControls;
 
   ExtendedTextSelection(
-      {this.onTap,
+      {this.onTapUp,
       this.softWrap,
       this.locale,
       this.textDirection,
@@ -245,7 +245,7 @@ class ExtendedTextSelectionState extends State<ExtendedTextSelection>
         break;
     }
 
-    if (widget.onTap != null) widget.onTap();
+    if (widget.onTapUp != null) widget.onTapUp(details);
   }
 
   void _handleSingleLongTapStart(LongPressStartDetails details) {
