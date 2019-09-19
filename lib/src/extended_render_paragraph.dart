@@ -4,7 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
-import 'dart:ui' as ui show Gradient, Shader, TextBox, PlaceholderAlignment;
+import 'dart:ui' as ui show Gradient, Shader, TextBox;
 import 'dart:math';
 
 import 'extended_text_typedef.dart';
@@ -12,10 +12,8 @@ import 'extended_text_typedef.dart';
 const String _kEllipsis = '\u2026';
 
 /// A render object that displays a paragraph of text
-class ExtendedRenderParagraph extends RenderBox
-    with
-        ContainerRenderObjectMixin<RenderBox, TextParentData>,
-        RenderBoxContainerDefaultsMixin<RenderBox, TextParentData> {
+class ExtendedRenderParagraph extends ExtendedTextRenderBox
+    with ExtendedTextSelectionRenderObject {
   /// Creates a paragraph render object.
   ///
   /// The [text], [textAlign], [textDirection], [overflow], [softWrap], and
@@ -58,9 +56,10 @@ class ExtendedRenderParagraph extends RenderBox
             textDirection: textDirection,
             textScaleFactor: textScaleFactor,
             maxLines: maxLines,
-            ellipsis: overFlowTextSpan != null
-                ? null
-                : (overflow == TextOverflow.ellipsis ? _kEllipsis : null),
+            ellipsis:
+                (overFlowTextSpan == null && overflow == TextOverflow.ellipsis)
+                    ? _kEllipsis
+                    : null,
             locale: locale,
             strutStyle: strutStyle,
             textWidthBasis: textWidthBasis),
@@ -68,12 +67,7 @@ class ExtendedRenderParagraph extends RenderBox
         _selectionColor = selectionColor,
         _selection = selection {
     addAll(children);
-    _extractPlaceholderSpans(text);
-  }
-  @override
-  void setupParentData(RenderBox child) {
-    if (child.parentData is! TextParentData)
-      child.parentData = TextParentData();
+    extractPlaceholderSpans(text);
   }
 
   ///TextSelection
@@ -112,7 +106,7 @@ class ExtendedRenderParagraph extends RenderBox
   OverFlowTextSpan _overFlowTextSpan;
   final TextOverflow _oldOverflow;
   OverFlowTextSpan get overFlowTextSpan => _overFlowTextSpan;
-  set overFlowTextSpan(TextSpan value) {
+  set overFlowTextSpan(OverFlowTextSpan value) {
     if (value != _overFlowTextSpan) {
       if (value != null) {
         overflow = TextOverflow.clip;
@@ -137,29 +131,17 @@ class ExtendedRenderParagraph extends RenderBox
         return;
       case RenderComparison.paint:
         _textPainter.text = value;
-        _extractPlaceholderSpans(value);
+        extractPlaceholderSpans(value);
         markNeedsPaint();
         markNeedsSemanticsUpdate();
         break;
       case RenderComparison.layout:
         _textPainter.text = value;
         _overflowShader = null;
-        _extractPlaceholderSpans(value);
+        extractPlaceholderSpans(value);
         markNeedsLayout();
         break;
     }
-  }
-
-  List<PlaceholderSpan> _placeholderSpans;
-  void _extractPlaceholderSpans(InlineSpan span) {
-    _placeholderSpans = <PlaceholderSpan>[];
-    span.visitChildren((InlineSpan span) {
-      if (span is PlaceholderSpan) {
-        final PlaceholderSpan placeholderSpan = span;
-        _placeholderSpans.add(placeholderSpan);
-      }
-      return true;
-    });
   }
 
   /// How the text should be aligned horizontally.
@@ -199,6 +181,7 @@ class ExtendedRenderParagraph extends RenderBox
   ///
   /// If [softWrap] is false, [overflow] and [textAlign] may have unexpected
   /// effects.
+  @override
   bool get softWrap => _softWrap;
   bool _softWrap;
   set softWrap(bool value) {
@@ -209,6 +192,7 @@ class ExtendedRenderParagraph extends RenderBox
   }
 
   /// How visual overflow should be handled.
+  @override
   TextOverflow get overflow => _overflow;
   TextOverflow _overflow;
   set overflow(TextOverflow value) {
@@ -286,136 +270,12 @@ class ExtendedRenderParagraph extends RenderBox
   }
 
   @override
-  double computeMinIntrinsicWidth(double height) {
-    if (!_canComputeIntrinsics()) {
-      return 0.0;
-    }
-    _computeChildrenWidthWithMinIntrinsics(height);
-    _layoutText(); // layout with infinite width.
-    return _textPainter.minIntrinsicWidth;
-  }
-
-  @override
-  double computeMaxIntrinsicWidth(double height) {
-    if (!_canComputeIntrinsics()) {
-      return 0.0;
-    }
-    _computeChildrenWidthWithMaxIntrinsics(height);
-    _layoutText(); // layout with infinite width.
-    return _textPainter.maxIntrinsicWidth;
-  }
-
-  double _computeIntrinsicHeight(double width) {
-    if (!_canComputeIntrinsics()) {
-      return 0.0;
-    }
-    _computeChildrenHeightWithMinIntrinsics(width);
-    _layoutText(minWidth: width, maxWidth: width);
-    return _textPainter.height;
-  }
-
-  @override
-  double computeMinIntrinsicHeight(double width) {
-    return _computeIntrinsicHeight(width);
-  }
-
-  @override
-  double computeMaxIntrinsicHeight(double width) {
-    return _computeIntrinsicHeight(width);
-  }
-
-  @override
   double computeDistanceToActualBaseline(TextBaseline baseline) {
     assert(!debugNeedsLayout);
     assert(constraints != null);
     assert(constraints.debugAssertIsValid());
     _layoutTextWithConstraints(constraints);
     return _textPainter.computeDistanceToActualBaseline(baseline);
-  }
-
-  // Intrinsics cannot be calculated without a full layout for
-  // alignments that require the baseline (baseline, aboveBaseline,
-  // belowBaseline).
-  bool _canComputeIntrinsics() {
-    for (PlaceholderSpan span in _placeholderSpans) {
-      switch (span.alignment) {
-        case ui.PlaceholderAlignment.baseline:
-        case ui.PlaceholderAlignment.aboveBaseline:
-        case ui.PlaceholderAlignment.belowBaseline:
-          {
-            assert(
-                RenderObject.debugCheckingIntrinsics,
-                'Intrinsics are not available for PlaceholderAlignment.baseline, '
-                'PlaceholderAlignment.aboveBaseline, or PlaceholderAlignment.belowBaseline,');
-            return false;
-          }
-        case ui.PlaceholderAlignment.top:
-        case ui.PlaceholderAlignment.middle:
-        case ui.PlaceholderAlignment.bottom:
-          {
-            continue;
-          }
-      }
-    }
-    return true;
-  }
-
-  void _computeChildrenWidthWithMaxIntrinsics(double height) {
-    RenderBox child = firstChild;
-    final List<PlaceholderDimensions> placeholderDimensions =
-        List<PlaceholderDimensions>(childCount);
-    int childIndex = 0;
-    while (child != null) {
-      // Height and baseline is irrelevant as all text will be laid
-      // out in a single line.
-      placeholderDimensions[childIndex] = PlaceholderDimensions(
-        size: Size(child.getMaxIntrinsicWidth(height), height),
-        alignment: _placeholderSpans[childIndex].alignment,
-        baseline: _placeholderSpans[childIndex].baseline,
-      );
-      child = childAfter(child);
-      childIndex += 1;
-    }
-    _textPainter.setPlaceholderDimensions(placeholderDimensions);
-  }
-
-  void _computeChildrenWidthWithMinIntrinsics(double height) {
-    RenderBox child = firstChild;
-    final List<PlaceholderDimensions> placeholderDimensions =
-        List<PlaceholderDimensions>(childCount);
-    int childIndex = 0;
-    while (child != null) {
-      final double intrinsicWidth = child.getMinIntrinsicWidth(height);
-      final double intrinsicHeight =
-          child.getMinIntrinsicHeight(intrinsicWidth);
-      placeholderDimensions[childIndex] = PlaceholderDimensions(
-        size: Size(intrinsicWidth, intrinsicHeight),
-        alignment: _placeholderSpans[childIndex].alignment,
-        baseline: _placeholderSpans[childIndex].baseline,
-      );
-      child = childAfter(child);
-      childIndex += 1;
-    }
-    _textPainter.setPlaceholderDimensions(placeholderDimensions);
-  }
-
-  void _computeChildrenHeightWithMinIntrinsics(double width) {
-    RenderBox child = firstChild;
-    final List<PlaceholderDimensions> placeholderDimensions =
-        List<PlaceholderDimensions>(childCount);
-    int childIndex = 0;
-    while (child != null) {
-      final double intrinsicHeight = child.getMinIntrinsicHeight(width);
-      final double intrinsicWidth = child.getMinIntrinsicWidth(intrinsicHeight);
-      placeholderDimensions[childIndex] = PlaceholderDimensions(
-        size: Size(intrinsicWidth, intrinsicHeight),
-        alignment: _placeholderSpans[childIndex].alignment,
-        baseline: _placeholderSpans[childIndex].baseline,
-      );
-      child = childAfter(child);
-      childIndex += 1;
-    }
-    _textPainter.setPlaceholderDimensions(placeholderDimensions);
   }
 
   @override
@@ -468,10 +328,10 @@ class ExtendedRenderParagraph extends RenderBox
       if (overFlowTextSpanOffset >= Offset.zero) {
         final TextPosition position =
             overFlowTextSpan.textPainterHelper.getPositionForOffset(offset);
-        final TextSpan span =
+        final InlineSpan span =
             overFlowTextSpan.textPainterHelper.getSpanForPosition(position);
 
-        if (span?.recognizer != null) {
+        if (span != null && span is TextSpan && span.recognizer != null) {
           span.recognizer.addPointer(event);
           return;
         }
@@ -496,88 +356,15 @@ class ExtendedRenderParagraph extends RenderBox
   @visibleForTesting
   bool get debugHasOverflowShader => _overflowShader != null;
 
-  void _layoutText({double minWidth = 0.0, double maxWidth = double.infinity}) {
-    final bool widthMatters = softWrap || overflow == TextOverflow.ellipsis;
-    _textPainter.layout(
-        minWidth: minWidth,
-        maxWidth: widthMatters ? maxWidth : double.infinity);
-  }
-
   void _layoutTextWithConstraints(BoxConstraints constraints) {
-    _layoutText(minWidth: constraints.minWidth, maxWidth: constraints.maxWidth);
-  }
-
-  // Layout the child inline widgets. We then pass the dimensions of the
-  // children to _textPainter so that appropriate placeholders can be inserted
-  // into the LibTxt layout. This does not do anything if no inline widgets were
-  // specified.
-  void _layoutChildren(BoxConstraints constraints) {
-    if (childCount == 0) {
-      return;
-    }
-    RenderBox child = firstChild;
-    final List<PlaceholderDimensions> placeholderDimensions =
-        List<PlaceholderDimensions>(childCount);
-    int childIndex = 0;
-    while (child != null) {
-      // Only constrain the width to the maximum width of the paragraph.
-      // Leave height unconstrained, which will overflow if expanded past.
-      child.layout(
-          BoxConstraints(
-            maxWidth: constraints.maxWidth,
-          ),
-          parentUsesSize: true);
-      double baselineOffset;
-      switch (_placeholderSpans[childIndex].alignment) {
-        case ui.PlaceholderAlignment.baseline:
-          {
-            baselineOffset = child
-                .getDistanceToBaseline(_placeholderSpans[childIndex].baseline);
-            break;
-          }
-        default:
-          {
-            baselineOffset = null;
-            break;
-          }
-      }
-      placeholderDimensions[childIndex] = PlaceholderDimensions(
-        size: child.size,
-        alignment: _placeholderSpans[childIndex].alignment,
-        baseline: _placeholderSpans[childIndex].baseline,
-        baselineOffset: baselineOffset,
-      );
-      child = childAfter(child);
-      childIndex += 1;
-    }
-    _textPainter.setPlaceholderDimensions(placeholderDimensions);
-  }
-
-  // Iterate through the laid-out children and set the parentData offsets based
-  // off of the placeholders inserted for each child.
-  void _setParentData() {
-    RenderBox child = firstChild;
-    int childIndex = 0;
-
-    ///maybe overflow
-    while (child != null &&
-        childIndex < _textPainter.inlinePlaceholderBoxes.length) {
-      final TextParentData textParentData = child.parentData;
-
-      textParentData.offset = Offset(
-          _textPainter.inlinePlaceholderBoxes[childIndex].left,
-          _textPainter.inlinePlaceholderBoxes[childIndex].top);
-      textParentData.scale = _textPainter.inlinePlaceholderScales[childIndex];
-      child = childAfter(child);
-      childIndex += 1;
-    }
+    layoutText(minWidth: constraints.minWidth, maxWidth: constraints.maxWidth);
   }
 
   @override
   void performLayout() {
-    _layoutChildren(constraints);
+    layoutChildren(constraints);
     _layoutTextWithConstraints(constraints);
-    _setParentData();
+    setParentData();
 
     // We grab _textPainter.size and _textPainter.didExceedMaxLines here because
     // assigning to `size` will trigger us to validate our intrinsic sizes,
@@ -701,31 +488,8 @@ class ExtendedRenderParagraph extends RenderBox
     }
     _textPainter.paint(context.canvas, offset);
 
-    RenderBox child = firstChild;
-    int childIndex = 0;
+    paintWidgets(context, offset);
 
-    ///maybe overflow
-    while (child != null &&
-        childIndex < _textPainter.inlinePlaceholderBoxes.length) {
-      //assert(childIndex < _textPainter.inlinePlaceholderBoxes.length);
-
-      final TextParentData textParentData = child.parentData;
-
-      final double scale = textParentData.scale;
-      context.pushTransform(
-        needsCompositing,
-        offset + textParentData.offset,
-        Matrix4.diagonal3Values(scale, scale, scale),
-        (PaintingContext context, Offset offset) {
-          context.paintChild(
-            child,
-            offset,
-          );
-        },
-      );
-      child = childAfter(child);
-      childIndex += 1;
-    }
     if (_needsClipping) {
       if (_overflowShader != null) {
         context.canvas.translate(offset.dx, offset.dy);
@@ -1055,23 +819,25 @@ class ExtendedRenderParagraph extends RenderBox
           rect.width - textPainter.width, rect.height - textPainter.height);
 
       ///find TextPosition near bottomRight
-      TextPosition lastOnePosition = getPositionForOffset(rect.bottomRight);
+      TextPosition lastOnePosition =
+          _textPainter.getPositionForOffset(rect.bottomRight);
 
-      final InlineSpan lastTextSpan =
-          _textPainter.text.getSpanForPosition(lastOnePosition);
+//      final InlineSpan lastTextSpan =
+//          _textPainter.text.getSpanForPosition(lastOnePosition);
 
       ///find overflow TextPosition that not clip the original text
       Offset finalOverFlowOffset = _findFinalOverflowOffset(
           rect: rect,
           x: rect.width - textPainter.width,
           endTextOffset: lastOnePosition.offset,
-          y: rect.bottom);
+          y: rect.bottom,
+          effectiveOffset: Offset.zero);
 
       Offset bottomRight = rect.bottomRight;
-      if (lastTextSpan is ExtendedWidgetSpan) {
-        bottomRight =
-            Offset(bottomRight.dx + lastTextSpan.size.width, bottomRight.dy);
-      }
+//      if (lastTextSpan is ExtendedWidgetSpan) {
+//        bottomRight =
+//            Offset(bottomRight.dx + lastTextSpan.size.width, bottomRight.dy);
+//      }
       final Rect overFlowTextSpanRect =
           Rect.fromPoints(finalOverFlowOffset, bottomRight);
 
@@ -1096,6 +862,7 @@ class ExtendedRenderParagraph extends RenderBox
 
       Rect textRect = offset & size;
       Rect overFlowRect = overFlowTextSpanRect.shift(offset);
+      final double visibleRegionSlop = _textPainter.preferredLineHeight / 2.0;
 
       return Path()
         ..addPolygon(<Offset>[
@@ -1103,8 +870,8 @@ class ExtendedRenderParagraph extends RenderBox
           textRect.topRight,
           overFlowRect.topRight,
           overFlowRect.topLeft,
-          overFlowRect.bottomLeft,
-          textRect.bottomLeft,
+          overFlowRect.bottomLeft.translate(0.0, visibleRegionSlop),
+          textRect.bottomLeft.translate(0.0, visibleRegionSlop),
         ], true);
     }
 
@@ -1112,23 +879,49 @@ class ExtendedRenderParagraph extends RenderBox
   }
 
   /// y find min y, so that over flow text will be covered
-  Offset _findFinalOverflowOffset(
-      {Rect rect, double x, int endTextOffset, double y}) {
-    Offset endOffset = getOffsetForCaret(
-      TextPosition(offset: endTextOffset),
-      rect,
-    );
-    final TextPosition position = getPositionForOffset(endOffset);
+  Offset _findFinalOverflowOffset({
+    Rect rect,
+    double x,
+    int endTextOffset,
+    double y,
+    Offset effectiveOffset,
+  }) {
+//    Offset endOffset = getOffsetForCaret(
+//      TextPosition(offset: endTextOffset),
+//      rect,
+//    );
+
+    Offset endOffset = getCaretOffset(
+        TextPosition(
+          offset: endTextOffset,
+        ),
+        handleSpecialText: handleSpecialText,
+        effectiveOffset: effectiveOffset);
+
+    if (endOffset == Offset.zero && endTextOffset > 0) {
+      return _findFinalOverflowOffset(
+          rect: rect,
+          x: x,
+          endTextOffset: endTextOffset - 1,
+          y: y,
+          effectiveOffset: effectiveOffset);
+    }
+
+    //final TextPosition position = getPositionForOffset(endOffset);
 
     ///handle image span
-    final InlineSpan textSpan = _textPainter.text.getSpanForPosition(position);
-    if (textSpan is ExtendedWidgetSpan) {
-      endOffset = Offset(endOffset.dx - textSpan.size.width, endOffset.dy);
-    }
+//    final InlineSpan textSpan = _textPainter.text.getSpanForPosition(position);
+//    if (textSpan is ExtendedWidgetSpan) {
+//      endOffset = Offset(endOffset.dx - textSpan.size.width, endOffset.dy);
+//    }
     //overflow
     if (endOffset == null || (endTextOffset != 0 && endOffset == Offset.zero)) {
       return _findFinalOverflowOffset(
-          rect: rect, x: x, endTextOffset: endTextOffset - 1, y: y);
+          rect: rect,
+          x: x,
+          endTextOffset: endTextOffset - 1,
+          y: y,
+          effectiveOffset: effectiveOffset);
     }
 
     if (endOffset.dx > x) {
@@ -1136,7 +929,8 @@ class ExtendedRenderParagraph extends RenderBox
           rect: rect,
           x: x,
           endTextOffset: endTextOffset - 1,
-          y: min(y, endOffset.dy));
+          y: min(y, endOffset.dy),
+          effectiveOffset: effectiveOffset);
     }
     return Offset(endOffset.dx, min(y, endOffset.dy));
   }
@@ -1203,11 +997,9 @@ class ExtendedRenderParagraph extends RenderBox
       selection = TextSelection(baseOffset: word.start, extentOffset: word.end);
     }
     return handleSpecialText
-        ? convertTextPainterSelectionToTextInputSelection(text, selection)
+        ? convertTextPainterSelectionToTextInputSelection(text, selection,
+            selectWord: true)
         : selection;
-//    if (position.offset >= word.end)
-//      return TextSelection.fromPosition(position);
-//    return TextSelection(baseOffset: word.start, extentOffset: word.end);
   }
 
   /// Move the selection to the beginning or end of a word.
@@ -1355,8 +1147,7 @@ class ExtendedRenderParagraph extends RenderBox
   ///
   ///  * [getLocalRectForCaret], which is the equivalent but for
   ///    a [TextPosition] rather than a [TextSelection].
-  List<TextSelectionPoint> getEndpointsForSelection(TextSelection selection,
-      {bool toolbar: false}) {
+  List<TextSelectionPoint> getEndpointsForSelection(TextSelection selection) {
     assert(constraints != null);
 //    if (temp.isCollapsed && toolbar) {
 //      // TODO(mpcomplete): This doesn't work well at an RTL/LTR boundary.
@@ -1373,6 +1164,7 @@ class ExtendedRenderParagraph extends RenderBox
 //
 //      return <TextSelectionPoint>[TextSelectionPoint(start, null)];
 //    } else
+
     if (!selection.isCollapsed) {
       _layoutTextWithConstraints(constraints);
       TextSelection textPainterSelection = selection;
@@ -1456,9 +1248,13 @@ class ExtendedRenderParagraph extends RenderBox
 
     final Rect visibleRegion = Offset.zero & size;
 
-    final Offset startOffset = _textPainter.getOffsetForCaret(
-      TextPosition(offset: selection.start, affinity: selection.affinity),
-      Rect.zero,
+    final Offset startOffset = getCaretOffset(
+      TextPosition(
+        offset: selection.start,
+        affinity: selection.affinity,
+      ),
+      effectiveOffset: effectiveOffset,
+      handleSpecialText: handleSpecialText,
     );
 
     // TODO(justinmc): https://github.com/flutter/flutter/issues/31495
@@ -1473,23 +1269,11 @@ class ExtendedRenderParagraph extends RenderBox
         .inflate(visibleRegionSlop)
         .contains(startOffset + effectiveOffset);
 
-    Offset endOffset = _textPainter.getOffsetForCaret(
+    final Offset endOffset = getCaretOffset(
       TextPosition(offset: selection.end, affinity: selection.affinity),
-      Rect.zero,
+      effectiveOffset: effectiveOffset,
+      handleSpecialText: handleSpecialText,
     );
-
-    if (handleSpecialText &&
-        selection.end > 0 &&
-        endOffset == Offset.zero &&
-        effectiveOffset == Offset.zero) {
-      var boxs = _textPainter.getBoxesForSelection(TextSelection(
-          baseOffset: selection.end - 1,
-          extentOffset: selection.end,
-          affinity: selection.affinity));
-      if (boxs.length > 0) {
-        endOffset = boxs.toList().last.toRect().topRight;
-      }
-    }
 
     _selectionEndInViewport.value = visibleRegion
         .inflate(visibleRegionSlop)
@@ -1500,4 +1284,20 @@ class ExtendedRenderParagraph extends RenderBox
     final Rect visibleRegion = Offset.zero & size;
     return visibleRegion.contains(globalToLocal(position));
   }
+
+  @override
+  Size getSize() {
+    return this.size;
+  }
+
+  @override
+  bool get isAttached => attached;
+
+  @override
+  Offset getlocalToGlobal(Offset point, {RenderObject ancestor}) {
+    return localToGlobal(point, ancestor: ancestor);
+  }
+
+  @override
+  TextPainter get textPainter => _textPainter;
 }

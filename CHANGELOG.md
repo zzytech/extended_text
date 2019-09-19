@@ -1,3 +1,26 @@
+## [0.6.6]
+
+* Fix kMinInteractiveSize is missing in high version of flutter
+* Fix text overflow about WidgetSpan
+
+## [0.6.4]
+
+* Improve codes about selection
+* Select all SpecialTextSpan which deleteAll is true when double tap or long tap
+
+## [0.6.3]
+
+* Fix issue [ImageSpan is not TextSpan](https://github.com/fluttercandies/extended_text/issues/24)
+
+## [0.6.2]
+
+* Fix wrong selection offset
+* Fix wrong text clip due to overflowspan
+
+## [0.6.1]
+
+* Fix issue [type 'List<InlineSpan>' is not a subtype of type 'List<TextSpan>'](https://github.com/fluttercandies/extended_text/issues/20)
+
 ## [0.6.0]
 
 * Improve codes base on v1.7.8
