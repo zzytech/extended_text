@@ -1,6 +1,6 @@
 import 'dart:ui';
 
-import 'package:extended_text_library/extended_text_library.dart';
+import 'package:extended_text_library/extended_text_library.dart' hide CommonTextSelectionGestureDetectorBuilder;
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
@@ -9,6 +9,7 @@ import 'package:flutter/services.dart';
 import '../extended_render_paragraph.dart';
 import '../extended_rich_text.dart';
 import '../text_overflow_widget.dart';
+import './x_extended_text_selection.dart';
 import 'extended_text_selection_pointer_handler.dart';
 
 ///
@@ -17,7 +18,7 @@ import 'extended_text_selection_pointer_handler.dart';
 
 class ExtendedTextSelection extends StatefulWidget {
   const ExtendedTextSelection(
-      {this.onTap,
+      {this.onTapUp,
       this.softWrap,
       this.locale,
       this.textDirection,
@@ -55,7 +56,7 @@ class ExtendedTextSelection extends StatefulWidget {
 
   final TextWidthBasis textWidthBasis;
 
-  final GestureTapCallback onTap;
+  final GestureTapUpCallback onTapUp;
 
   /// How the text should be aligned horizontally.
   final TextAlign textAlign;
@@ -155,7 +156,7 @@ class ExtendedTextSelectionState extends State<ExtendedTextSelection>
       delegate: this,
       hideToolbar: hideToolbar,
       showToolbar: showToolbar,
-      onTap: widget.onTap,
+      onTapUp: widget.onTapUp,
       context: context,
       requestKeyboard: null,
     );

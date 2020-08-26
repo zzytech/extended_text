@@ -28,7 +28,7 @@ class ExtendedText extends StatelessWidget {
     this.specialTextSpanBuilder,
     this.onSpecialTextTap,
     this.selectionEnabled = false,
-    this.onTap,
+    this.onTapUp,
     this.selectionColor,
     this.dragStartBehavior = DragStartBehavior.start,
     this.textSelectionControls,
@@ -57,7 +57,7 @@ class ExtendedText extends StatelessWidget {
     this.textHeightBehavior,
     this.onSpecialTextTap,
     this.selectionEnabled = false,
-    this.onTap,
+    this.onTapUp,
     this.selectionColor,
     this.dragStartBehavior = DragStartBehavior.start,
     this.textSelectionControls,
@@ -94,7 +94,7 @@ class ExtendedText extends StatelessWidget {
   final Color selectionColor;
 
   ///Called when the user taps on this text.
-  final GestureTapCallback onTap;
+  final GestureTapUpCallback onTapUp;
 
   ///whether enable selection
   final bool selectionEnabled;
@@ -243,7 +243,7 @@ class ExtendedText extends StatelessWidget {
         text: innerTextSpan,
         selectionColor: selectionColor ?? Theme.of(context).textSelectionColor,
         dragStartBehavior: dragStartBehavior,
-        onTap: onTap,
+        onTapUp: onTapUp,
         data: data ?? textSpanToActualText(innerTextSpan),
         textSelectionControls: textSelectionControls,
         textHeightBehavior:
